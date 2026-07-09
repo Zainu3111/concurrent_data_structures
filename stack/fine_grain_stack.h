@@ -3,20 +3,19 @@
 #include <vector>
 #include <cstddef>
 #include <mutex>
+#include <utility>
 
-// For coarse-grain, I will be locking the mutex every time I 
-// access the stack since that is the most coarse I could think 
-// of. Later I plan to make fine-grained stack and lock-free
-// stack so i could essentially benchmark the benefits of adding 
-// a lot more complexity. Essentially a baseline implementation.
+// Since a stack only has one point to access, there is relatively
+// little oppertunity for fine grain locks. The only improvement
+// i can see over the coarse grain stack is that we are making the 
+// nodes before locking, essentially reducing the critical section.
+// This could improve performance in case the object is bigger 
+// and more complex. 
 template <typename T>
 class fine_grain_stack{
-	class ListNode{
-		private:
+	struct ListNode{
 			T value;
 			ListNode* next = nullptr;
-
-		public:
 			explicit ListNode(T&& val)
 				: value(std::move(val)) {}
 			explicit ListNode(const T& val)
@@ -34,7 +33,7 @@ class fine_grain_stack{
 			while(head){
 				auto temp = head;
 				head = head->next;
-				delete head;
+				delete temp;
 			}
 		}
 
@@ -77,12 +76,5 @@ class fine_grain_stack{
 			std::lock_guard<std::mutex> guard(_lock);
 			return head == nullptr;
 		}
-/*
-		// Similar to empty.
-		inline size_t size() const{
-			std::lock_guard<std::mutex> guard(_lock);
-			return _stack.size();
-		}
-*/
 };
 #endif
