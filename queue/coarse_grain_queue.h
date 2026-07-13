@@ -1,6 +1,6 @@
 #ifndef SEQ_STACK_HH
 #define SEQ_STACK_HH
-#include <vector>
+#include <deque>
 #include <cstddef>
 #include <mutex>
 
@@ -13,37 +13,37 @@ template <typename T>
 class coarse_grain_queue{
 	private:
 		mutable std::mutex _lock;
-		std::vector<T> _stack;
+		std::deque<T> _queue;
 
 	public:
-		coarse_grain_stack() = default;
-		~coarse_grain_stack() = default;
+		coarse_grain_queue() = default;
+		~coarse_grain_queue() = default;
 
 		// Places the value at the top into the location provided.
-		inline bool pop(T& location){
+		inline bool try_pop(T& location){
 			// Using std::lock_guard so I do not have to free the
 			// lock everytime and helps in case i forget to unlock.
 			std::lock_guard<std::mutex> guard(_lock);
-			if(_stack.empty()){
+			if(_queue.empty()){
 				return false;
 			}
 
-			location = std::move(_stack.back());
-			_stack.pop_back();
+			location = std::move(_queue.front());
+			_queue.pop_front();
 			return true;
 
 		}
 
 		inline void push(const T& value){
 			std::lock_guard<std::mutex> guard(_lock);
-			_stack.push_back(value);
+			_queue.push_back(value);
 		}
 
 		// Universal refrence -> allows for lvalues and rvalues
 		// -> std::forward
 		inline void push(T&& value){
 			std::lock_guard<std::mutex> guard(_lock);
-			_stack.push_back(std::move(value));
+			_queue.push_back(std::move(value));
 		}
 
 
@@ -51,13 +51,13 @@ class coarse_grain_queue{
 		// object.
 		inline bool empty() const{
 			std::lock_guard<std::mutex> guard(_lock);
-			return _stack.empty();
+			return _queue.empty();
 		}
 
 		// Similar to empty.
 		inline size_t size() const{
 			std::lock_guard<std::mutex> guard(_lock);
-			return _stack.size();
+			return _queue.size();
 		}
 };
 #endif
