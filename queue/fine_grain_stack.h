@@ -1,21 +1,45 @@
-#ifndef SEQ_STACK_HH
-#define SEQ_STACK_HH
-#include <vector>
+#ifndef FINE_GRAIN_QUEUE_HH
+#define FINE_GRAIN_QUEUE_HH
+
+
+// Fine-Grained Queue
+//
+// Synchronization:
+//   - head_mutex protects head.
+//   - tail_mutex protects tail.
+//
+// Complexity:
+//   push()    : O(1)
+//   try_pop() : O(1)
+//
+// Concurrency:
+//   - Concurrent push() and pop() are allowed.
+//   - Multiple pushes serialize on tail_mutex.
+//   - Multiple pops serialize on head_mutex.
+//
+// Design:
+//   Uses a moving dummy node to simplify the empty queue case.
+
+
 #include <cstddef>
 #include <mutex>
 #include <utility>
 
-// Since a stack only has one point to access, there is relatively
-// little oppertunity for fine grain locks. The only improvement
-// i can see over the coarse grain stack is that we are making the 
-// nodes before locking, essentially reducing the critical section.
-// This could improve performance in case the object is bigger 
-// and more complex. 
+// Since a queue has two points of access, there is relatively more 
+// oppertunity for fine grain locking. Having 2 locks, one for head
+// and another for the tail allows 2 threads to concurrently access 
+// the queue. Unfortunately, we have to lock the tail while popping 
+// for a small section in order to make sure we that we have enough 
+// elements in the queue. Hopefully, we see some benefit of this fine 
+// grain locking when benchmarking. However, I speculate that the 
+// added extra work of loading linked lists, we might not see a huge
+// difference in practice.
 template <typename T>
 class fine_grain_queue{
 	struct ListNode{
 			T value;
 			ListNode* next = nullptr;
+			explicit ListNode() = default;
 			explicit ListNode(T&& val)
 				: value(std::move(val)) {}
 			explicit ListNode(const T& val)
@@ -30,13 +54,14 @@ class fine_grain_queue{
 
 	public:
 		fine_grain_queue(){
-			auto dummy = new ListNode(0);
-			head = &dummy;
-			tail = &dummy;
+			auto* dummy = new ListNode();
+			head = dummy;
+			tail = dummy;
 		}
 
+		// Make sure that we do not end up with a leak.
 		~fine_grain_queue(){
-			std::scoped_lock<std::mutex, std::mutex> guard(head_lock, tail_lock); 
+			std::scoped_lock guard(head_lock, tail_lock); 
 			while(head){
 				auto temp = head;
 				head = head->next;
@@ -44,20 +69,24 @@ class fine_grain_queue{
 			}
 		}
 
-		inline bool get_tail(){
+		inline ListNode* get_tail(){
 			std::lock_guard guard(tail_lock);
 			return tail;
 		}
 
+		// The head always point to a dummy node, we move the head,
+		// and delete the old head and move the new head value into
+		// the location, essentially making the new head the dummy
+		// node.
 		inline bool try_pop(T& location){
 			
 			std::lock_guard guard(head_lock);
-			if(head == tail){
+			if(head == get_tail()){
 				return false;
 			}
-			auto temp = head->next;
+			auto temp = head;
 			head = head->next;
-			location = std::move(head->val);
+			location = std::move(head->value);
 			delete temp;
 			return true;
 		}
@@ -76,10 +105,11 @@ class fine_grain_queue{
 			tail = temp;
 		}
 
-
+		// Using scoped_locks in order to lock both of them at the 
+		// same time in order to avoid a dead-lock.
 		inline bool empty() const{
-			std::lock_guard<std::mutex> guard(head_lock);
-			return head->next == nullptr;
+			std::scoped_lock guard(head_lock, tail_lock);
+			return head == tail;
 		}
 };
 #endif
