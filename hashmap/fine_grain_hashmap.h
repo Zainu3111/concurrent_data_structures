@@ -59,6 +59,17 @@ class fine_grain_hashmap{
 		}
 
 		inline bool contains(const Key& key) const {
+			auto index = get_index(key);
+			const Bucket& bucket = buckets[index];
+			std::shared_lock<std::shared_mutex> lock(bucket.m);
+			ListNode* cur = bucket.head.next;
+			while (cur){
+				if (cur->key == key){
+					return true;
+				}
+				cur = cur->next;
+			}
+			return false;
 		}
 
 		inline bool erase(const Key& key){
