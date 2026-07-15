@@ -40,8 +40,7 @@ class fine_grain_hashmap{
 		{}
 
 		~fine_grain_hashmap(){
-			//TODO traverse all the buckets and delete if something
-			//is in the bucket.
+			clear();
 		}
 
 		bool find(const Key& key, Value& val) const {
@@ -126,9 +125,26 @@ class fine_grain_hashmap{
 		}
 
 		inline bool empty() const{
+			for(size_t i{}; i < bucket_count; ++i){
+				const Bucket& bucket = buckets[i];
+				std::shared_lock lock(bucket.m);
+				if(bucket.head.next) return false;
+			}
+			return true;
 		}
 
 		inline size_t size() const{
+			size_t res{};
+			for(size_t i{}; i < bucket_count; ++i){
+				const Bucket& bucket = buckets[i];
+				std::shared_lock lock(bucket.m);
+				ListNode* cur = bucket.head.next;
+				while(cur){
+					++res;
+					cur = cur->next;
+				}
+			}
+			return res;
 		}
 };
 #endif
