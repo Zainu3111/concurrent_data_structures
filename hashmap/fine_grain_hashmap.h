@@ -90,7 +90,22 @@ class fine_grain_hashmap{
 		inline bool insert(Key&& key, Value&& val){
 		}
 
-		void erase(const Key& key){
+		bool erase(const Key& key){
+			auto index = get_index(key);
+			Bucket& bucket = buckets[index];
+			std::unique_lock lock(bucket.m);
+			ListNode* cur = bucket.head.next;
+			ListNode* prev = &bucket.head;
+			while (cur){
+				if (cur->key == key){
+					prev->next = cur->next;
+					delete cur;
+					return true;
+				}
+				prev = cur;
+				cur = cur->next;
+			}
+			return false;	
 		}
 
 		inline bool empty() const{
