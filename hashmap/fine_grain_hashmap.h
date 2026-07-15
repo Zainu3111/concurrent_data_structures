@@ -87,7 +87,24 @@ class fine_grain_hashmap{
 			}
 		}
 
-		inline bool insert(Key&& key, Value&& val){
+		bool insert(const Key& key, const Value& val){
+			auto index = get_index(key);
+			Bucket& bucket = buckets[index];
+			std::unique_lock lock(bucket.m);
+			ListNode* cur = bucket.head.next;
+			while (cur){
+				if (cur->key == key){
+					cur->data = val;
+					return false;
+				}
+				cur = cur->next;
+			}
+			auto temp = new ListNode();
+			temp->data = val;
+			temp->next = bucket.head.next;
+			temp.key = key;
+			bucket.head.next = temp;
+			return true;
 		}
 
 		bool erase(const Key& key){
