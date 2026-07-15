@@ -4,6 +4,7 @@
 #include <utility>
 #include <cstddef>
 #include <shared_mutex>
+#include <mutex>
 #include <vector>
 // For coarse-grain, I will be locking the mutex every time I 
 // access the haspmap since that is the most coarse I could think 
@@ -58,7 +59,7 @@ class fine_grain_hashmap{
 			return false;
 		}
 
-		inline bool contains(const Key& key) const {
+		bool contains(const Key& key) const {
 			auto index = get_index(key);
 			const Bucket& bucket = buckets[index];
 			std::shared_lock<std::shared_mutex> lock(bucket.m);
@@ -72,13 +73,24 @@ class fine_grain_hashmap{
 			return false;
 		}
 
-		inline bool erase(const Key& key){
+		void clear(){
+			for(size_t i{}; i < bucket_count; ++i){
+				Bucket& bucket = buckets[i];
+				std::unique_lock lock(bucket.m);
+				ListNode* cur = bucket.head.next;
+				while (cur){
+					auto temp = cur;
+					cur = cur->next;
+					delete temp;
+				}
+				bucket.head.next = nullptr;
+			}
 		}
 
 		inline bool insert(Key&& key, Value&& val){
 		}
 
-		inline void clear(){
+		void erase(const Key& key){
 		}
 
 		inline bool empty() const{
